@@ -1,99 +1,125 @@
 # IELTS Zone — Playwright autotests
 
-Site: https://demo-main.ieltszoneapp.uz/admin
+[demo-main.ieltszoneapp.uz](https://demo-main.ieltszoneapp.uz/admin) CRM paneli va
+[demo.ieltszoneapp.uz/placement-test](https://demo.ieltszoneapp.uz/placement-test) public sahifasi uchun avtotestlar.
+Stack: **Playwright + TypeScript**, Page Object Model, custom fixtures.
 
-## Scenario: `tests/community-lead-to-group.spec.ts`
-Community'dan yangi kelgan lidni olib, guruhga qo'shish:
+## Tuzilma
 
-1. **Call center → Community → "Kiruvchi lidlar"** — birinchi lid ochiladi → **"Lidni olish"**.
-2. Lid kartasi: **Lid voronka = Call markaz**, **Lid ustun = Uchrashuvga yozildi**, kelish sanasi (ertaga),
-   majburiy maydonlar (ism `Autotest<raqam>`, familiya, telefon `(00) 0xx-xx-xx`, Kim?, til, jins, yosh,
-   kunlar, vaqt, filial, kurs, sub kurs) → **"Saqlash"**.
-3. **Administratsiya → Uchrashuvga yozilganlar** — lid → **"Lidni olish"** (→ "Filialga keldi").
-4. **"Mos guruhga qo'shing"** → birinchi mos guruhda **[+]** → birinchi dars sanasi, tug'ilgan sana → **"Qo'shish"**.
-5. Guruh sahifasida talaba borligi tekshiriladi.
+```
+├── config/
+│   └── env.ts                  # URL'lar, login (.env dan), yo'llar
+├── src/
+│   ├── api/                    # HTTP orqali tez setup / cleanup (PlacementTestsApi)
+│   ├── components/             # Qayta ishlatiladigan UI elementlar: multiselect, datepicker, form, table
+│   ├── data/                   # Test ma'lumotlari: lid factory, route'lar, placement savol/javoblari
+│   ├── fixtures/               # test.extend — page object'lar va cleanup fixture'lar
+│   ├── pages/
+│   │   ├── admin/              # KanbanBoard, LeadCard, SuitableGroupPage, PlacementTestsPage
+│   │   └── public/             # PlacementTestPage (lid test yechadigan sahifa)
+│   └── utils/                  # dates, network (submit, CSRF), random, state
+├── tests/
+│   ├── setup/                  # auth.setup.ts — bir marta login, sessiya .auth/ga saqlanadi
+│   ├── functional/             # Izolyatsiyalangan test-case'lar (har biri o'zidan keyin tozalaydi)
+│   │   └── placement-test/     # positive · negative · edge-cases · ui-ux · validation · security
+│   └── e2e/                    # Uzun biznes oqimlari (demo ma'lumotlarini o'zgartiradi)
+│       ├── lead/               # community-lead-to-group, student-flow
+│       └── placement/          # new-placement-test → placement-level
+├── playwright.config.ts        # setup · functional · e2e project'lari
+└── .github/workflows/          # CI (qo'lda ishga tushiriladi)
+```
 
-> Test har safar demo saytda bitta haqiqiy "Kiruvchi lid"ni ishlatadi (o'zgartiradi).
-> Telefon raqami `000…` bilan boshlanadi — sayt lidga SMS yuboradi, haqiqiy odamga ketmasligi uchun.
+**Qoidalar**
+- Spec fayllarda faqat test qadamlari va tekshiruvlar bo'ladi; selector va UI amallari `src/pages` va `src/components` ichida.
+- Import'lar alias orqali: `@fixtures`, `@pages/*`, `@components/*`, `@data/*`, `@utils/*`, `@api/*`, `@config/*`.
+- Funksional testlar yaratgan har bir placement test `placementTestsApi` fixture'i orqali test tugagach o'chiriladi.
+- Bir run'dan keyingisiga o'tadigan ma'lumot (yaratilgan test ID, ism hisoblagichi) `.state/` papkasida saqlanadi va git'ga kirmaydi.
 
-## Run
+## O'rnatish
+
 ```bash
 npm install
 npx playwright install chromium
-npm test              # headless
-npm run test:headed   # brauzerni ko'rib turish
-npm run test:ui       # Playwright UI mode
-npm run report        # HTML hisobot
+cp .env.example .env      # IZ_EMAIL va IZ_PASSWORD ni to'ldiring (.env git'ga kirmaydi)
 ```
 
-Login ma'lumotlari: `.env.example` dan `.env` nusxa oling va `IZ_EMAIL`, `IZ_PASSWORD` ni to'ldiring (`.env` GitHub'ga yuklanmaydi).
+| O'zgaruvchi | Default | Ma'nosi |
+|---|---|---|
+| `IZ_EMAIL`, `IZ_PASSWORD` | — | CEO login (majburiy) |
+| `BASE_URL` | `https://demo-main.ieltszoneapp.uz` | Admin panel |
+| `PLACEMENT_URL` | `https://demo.ieltszoneapp.uz/placement-test` | Public placement sahifasi |
 
-Debug (allaqachon olingan lid bilan qadamdan davom ettirish):
-```bash
-LEAD_ID=68899 LEAD_NAME=Autotest763520 START_STEP=3 npx playwright test
-```
-
-## Scenario: `tests/student-flow.spec.ts` — **Student Flow**
-Community'dagi yangi liddan to aktiv guruhdagi talabagacha bo'lgan to'liq yo'l:
-
-1. **Community** (sidebar) → tepadagi **Select column = Kiruvchi lidlar** → birinchi chat → avatar → **"Lidni olish"**.
-2. Lid ma'lumotlari kiritiladi. Ism: `Autotest 0001`, `Autotest 0002`, ... (tartib raqami `student-flow-counter.json` faylida saqlanadi).
-   Lid voronka = **Call markaz**, ustun = **Yangi lidlar** → "Saqlash".
-3. Call center: **Yangi lidlar → Qayta aloqa → Uchrashuvga yozildi** (kelish sanasi = ertaga).
-   Kartadagi "Kelish sanasi" to'g'ri ekani tekshiriladi.
-4. Administratsiya: **Uchrashuvga yozildi → Filialga keldi** ("Lidni olish").
-5. **"Sinov test yaratish"** (`Demo test uchun`) → https://demo.ieltszoneapp.uz/placement-test saytida lid ID bilan test ishlanadi.
-   Level tasodifiy tanlanadi: o'tilishi kerak bo'lgan bo'limlarda 5 tadan **4 tasi** to'g'ri (minimal 80%), qolganlarida hammasi xato.
-   To'g'ri javoblar: `tests/placement-answers.ts`.
-6. Lid chatida **"Quiz Result: <level>"** tekshiriladi.
-7. **"Mos guruhga qo'shing"**: mos guruh bo'lmasa, level dropdown'i almashtirib ko'riladi.
-8. Guruhda **(...) → "Sinov darsga kelganlar"** → status "Sinov darsida qatnashdi".
-9. **Moliya → Kassalar** → birinchi kassa → **Daromad** → "Student to'ladi", telefon, guruh, Naqd, **990 000** → talaba **Faol**.
-10. **(...) → "Kutish ro'yxatiga o'tkazish"** → **Administratsiya → Kutish ro'yxati**da tekshiriladi.
-11. Kutish ro'yxati → **"Tanlovga qo'shish"** → To'plam guruh → **"Aktiv guruhga kochirish"** → talaba aktiv guruhda.
+## Ishga tushirish
 
 ```bash
-npx playwright test student-flow --headed
-PASSED_SECTIONS=2 npx playwright test student-flow   # levelni qo'lda berish (0..5): 2 → Pre-Intermediate
+npm test                        # hammasi
+npm run test:functional         # placement test-case'lari (50 ta)
+npm run test:e2e                # barcha biznes oqimlari
+npm run test:student-flow
+npm run test:community
+npm run test:placement:create   # yangi placement test yaratish
+npm run test:placement:level    # yaratilgan test bilan lid levelini tekshirish
+npm run test:headed             # brauzerni ko'rib turish
+npm run test:ui                 # Playwright UI mode
+npm run report                  # HTML hisobot
+npm run typecheck               # TypeScript tekshiruvi
 ```
 
-Debug (yarim qolgan talabani qadamdan davom ettirish):
+## Funksional: Placement Tests (`tests/functional/placement-test`)
+
+**Akademik bo'lim → Placement Tests** bo'limi: Positive (P1–P4), Negative (N1–N9), Edge cases (E1–E9),
+UI/UX (U1–U10), Validation (V1–V8), Security (S1–S10).
+Sarlavhasi `AT-QA` bilan boshlanadigan testlar yaratiladi va test tugagach o'chiriladi.
+Saytdagi ma'lum xatolar `test.fail()` bilan belgilangan (E9, V7): xato tuzatilsa, test qizil bo'lib xabar beradi.
+
+## E2E oqimlar
+
+### `lead/community-lead-to-group.spec.ts`
+1. **Call center → Community → "Kiruvchi lidlar"**: birinchi lid → **"Lidni olish"**.
+2. Lid kartasi: **Call markaz → Uchrashuvga yozildi**, kelish sanasi (ertaga), majburiy maydonlar → **"Saqlash"**.
+3. **Administratsiya**: lid → **"Lidni olish"** (→ "Filialga keldi").
+4. **"Mos guruhga qo'shing"** → birinchi guruhda **[+]** → **"Qo'shish"**.
+5. Guruh sahifasida talaba borligi tekshiriladi.
+
+> Test har safar demo saytda bitta haqiqiy "Kiruvchi lid"ni ishlatadi.
+> Telefon raqami `000…` bilan boshlanadi: sayt lidga SMS yuboradi, u haqiqiy odamga ketmasligi kerak.
+
 ```bash
-START_STEP=12 LEAD_NAME="Autotest 0002" LEAD_PHONE=000646826 GROUP_ID=1028 STUDENT_ID=22959 npx playwright test student-flow
+LEAD_ID=68899 LEAD_NAME=Autotest763520 START_STEP=3 npm run test:community   # qadamdan davom ettirish
 ```
 
-## Scenario: `tests/new-placement-test.spec.ts` — **New Placement Test**
-**Akademik bo'lim → Placement Tests → New Placement Test**:
+### `lead/student-flow.spec.ts` — Student Flow
+Community'dagi yangi liddan to aktiv guruhdagi talabagacha:
+Community → Call center (Yangi lidlar → Qayta aloqa → Uchrashuvga yozildi) → Administratsiya (Filialga keldi) →
+**Sinov test** (`Demo test uchun`, javoblar `src/data/placement/demo-test.ts`) → lid chatida "Quiz Result" →
+mos guruh → "Sinov darsga kelganlar" → **Kassa: 990 000 UZS** → talaba Faol → Kutish ro'yxati → To'plam guruh → Aktiv guruh.
 
-1. Sarlavha `General English Placement <sana vaqt>`, Kurslar = **General English + IELTS**
-   (IELTS levellari faqat IELTS kursi tanlanganda chiqadi), Time limit = **5:00** → "Save and add sections".
-2. 6 ta section (Beginner → Elementary → Pre-Intermediate → Intermediate → IELTS Boshlang'ich → IELTS Standart),
-   har birida **Multiple Choice** blok, 5 tadan savol, 4 tadan variant; to'g'ri variant yonidagi yashil belgi (radio) qo'yiladi
-   va uning matni **`>> `** bilan boshlanadi (test yechayotganda to'g'ri javob ko'rinib turadi).
-   Savollar va to'g'ri javoblar: `tests/new-placement-questions.ts`.
-3. Ro'yxatda test tekshiriladi: 6 section, 30 savol, 05:00. Test ID va nomi `new-placement-test.json`ga yoziladi.
+Ism: `Autotest 0001`, `Autotest 0002`, … (hisoblagich `.state/student-flow-counter.json`).
 
 ```bash
-npx playwright test new-placement-test --headed
-TEST_ID=240 npx playwright test new-placement-test   # debug: yaratilgan testga sectionlarni qayta yozish
+PASSED_SECTIONS=2 npm run test:student-flow    # levelni qo'lda berish (0..5): 2 → Pre-Intermediate
+START_STEP=12 LEAD_NAME="Autotest 0002" LEAD_PHONE=000646826 GROUP_ID=1028 STUDENT_ID=22959 npm run test:student-flow
 ```
 
-## Scenario: `tests/placement-level.spec.ts` — **Placement test leveli**
-`new-placement-test.spec.ts` yaratgan test (`new-placement-test.json`) bilan:
-
-1. **Administratsiya → Filialga keldi** ustunidan lid tanlanadi (telefoni `(00)` bo'lgan test lid bo'lsa o'sha, bo'lmasa birinchisi).
-2. **"Sinov test yaratish"** → yaratilgan test tanlanadi.
-3. https://demo.ieltszoneapp.uz/placement-test saytida lid ID bilan test yechiladi. Har safar tasodifiy darajagacha:
-   o'tilgan bo'limlarda 5 tadan **4 tasi** `>>` belgili (to'g'ri) javob, qolgan bo'limlarda hammasi xato.
-4. Natija sahifasidagi **"Your level"** va lid chatidagi oxirgi **"Quiz Result: <level>"** tekshiriladi.
+### `placement/new-placement-test.spec.ts` → `placement/placement-level.spec.ts`
+1. **New Placement Test**: General English + IELTS, 5:00, 6 ta section (Beginner → IELTS Standart) × 5 ta Multiple Choice savol
+   (`src/data/placement/generated-test.ts`). To'g'ri variant yashil belgi bilan belgilanadi va matni **`>> `** bilan boshlanadi.
+   Test ID va nomi `.state/generated-placement-test.json`ga yoziladi.
+2. **Placement level**: "Filialga keldi"dagi lid (`(00)` telefonli test lid afzal) shu testni yechadi.
+   O'tilgan bo'limlarda 5 tadan **4 tasi** to'g'ri (minimal 80%), qolganlarida hammasi xato.
+   Natija sahifasidagi **"Your level"** va lid chatidagi **"Quiz Result"** tekshiriladi.
 
 | PASSED_SECTIONS | 0 | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|---|
 | Level | Beginner | Elementary | Pre-Intermediate | Intermediate | IELTS Novice | IELTS Standard |
 
 ```bash
-npx playwright test new-placement-test            # avval testni yaratish (bir marta)
-npx playwright test placement-level --headed      # tasodifiy level
-PASSED_SECTIONS=3 npx playwright test placement-level   # levelni qo'lda berish → Intermediate
-LEAD_ID=69439 npx playwright test placement-level       # aniq lid bilan
+TEST_ID=240 npm run test:placement:create      # mavjud testga sectionlarni qayta yozish
+PASSED_SECTIONS=3 LEAD_ID=69439 npm run test:placement:level
 ```
+
+## CI
+
+`.github/workflows/playwright.yml` — GitHub Actions'da **qo'lda** ishga tushiriladi (Actions → Playwright → Run workflow),
+chunki e2e testlar demo ma'lumotlarini o'zgartiradi. Repo **Settings → Secrets → Actions**ga `IZ_EMAIL` va `IZ_PASSWORD` qo'shing.
+Hisobot artefakt sifatida yuklanadi.

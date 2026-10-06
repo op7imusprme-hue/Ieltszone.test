@@ -4,15 +4,26 @@
   "description": "Playwright autotests for demo-main.ieltszoneapp.uz",
   "scripts": {
     "test": "playwright test",
+    "test:functional": "playwright test --project=functional",
+    "test:e2e": "playwright test --project=e2e",
+    "test:student-flow": "playwright test tests/e2e/lead/student-flow.spec.ts",
+    "test:community": "playwright test tests/e2e/lead/community-lead-to-group.spec.ts",
+    "test:placement:create": "playwright test tests/e2e/placement/new-placement-test.spec.ts",
+    "test:placement:level": "playwright test tests/e2e/placement/placement-level.spec.ts",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "typecheck": "tsc --noEmit",
+    "list": "playwright test --list"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.63.0"
-  }
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.1",
+    "typescript": "^5.9.3"
+  },
+  "private": true
 }
