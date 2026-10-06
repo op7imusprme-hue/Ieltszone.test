@@ -1,0 +1,24 @@
+const { chromium } = require('playwright');
+(async () => {
+  const b = await chromium.launch();
+  const ctx = await b.newContext({ baseURL: 'https://demo-main.ieltszoneapp.uz', storageState: '.auth/ceo.json', viewport:{width:1440,height:900} });
+  const p = await ctx.newPage();
+  p.on('response', async r => { if (r.request().method()!=='GET') console.log('  RESP', r.request().method(), r.status()); });
+  await p.goto('/admin/placement-test/258'); await p.waitForLoadState('networkidle');
+  await p.getByRole('button', { name: 'Add section' }).click(); await p.waitForTimeout(2000);
+  await p.getByRole('link', { name: 'Edit section questions' }).first().click(); await p.waitForURL(/edit$/); await p.waitForLoadState('networkidle');
+  await p.locator('#title').fill('S1');
+  await p.getByRole('button', { name: 'Add Question', exact: true }).click();
+  const id = (await p.locator('label[for^="question_type_"]').last().getAttribute('for')).replace('question_type_','');
+  await p.locator(`xpath=//label[@for="question_type_${id}"]/../following-sibling::*[1]`).locator('.multiselect-wrapper').click();
+  await p.locator('[role="option"]:visible').filter({hasText:/^Multiple Choice$/}).first().click();
+  const pre = `multiple_choice_${id}`;
+  const before = await p.locator('body').innerText();
+  const save = async (label) => { await p.getByRole('button', { name: 'Save section' }).click(); await p.waitForTimeout(2500); const t = await p.locator('body').innerText(); console.log(label, '=>', p.url().endsWith('edit') ? 'stay' : 'LEFT', '|', t.split('\n').filter(l=>!before.includes(l)).join(' | ')); const html = await p.locator('body').innerHTML(); const m = html.match(/<[^>]*(toast|notification|alert)[^>]*>/i); console.log('   toastEl', m && m[0].slice(0,300)); };
+  await p.locator(`textarea[id^="${pre}_question_"]`).first().fill('Q text');
+  await save('options empty');
+  const opts = p.locator(`input[id^="${pre}_option_"]`);
+  await opts.nth(0).fill('a'); await opts.nth(1).fill('b'); await opts.nth(2).fill('c');
+  await save('no correct');
+  await b.close();
+})();
